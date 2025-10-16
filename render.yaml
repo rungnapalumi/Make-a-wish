@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: movement-dx21
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.8.1
+      - key: STREAMLIT_SERVER_MAX_UPLOAD_SIZE
+        value: 200
+      - key: STREAMLIT_SERVER_ENABLE_CORS
+        value: false
