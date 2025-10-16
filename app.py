@@ -200,16 +200,16 @@ def main():
         else:
             st.info("👤 User Mode: Upload videos for admin review")
         
-        uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'mov', 'avi'], help="Maximum file size: 200MB")
+        uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'mov', 'avi'], help="Maximum file size: 900MB")
         
         if uploaded_file is not None:
             try:
-                # Check file size (200MB limit)
+                # Check file size (900MB limit)
                 file_size_mb = len(uploaded_file.read()) / (1024 * 1024)
                 uploaded_file.seek(0)  # Reset file pointer
                 
-                if file_size_mb > 200:
-                    st.error(f"⚠️ File too large: {file_size_mb:.1f}MB. Maximum allowed: 200MB")
+                if file_size_mb > 900:
+                    st.error(f"⚠️ File too large: {file_size_mb:.1f}MB. Maximum allowed: 900MB")
                 else:
                     # Save uploaded file temporarily
                     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
