@@ -181,7 +181,7 @@ def main():
         
         **หมายเหตุ:** ในการตอบคำถามต่างๆขอให้ตอบอย่างละเอียด และเคลื่อนไหวเป็นธรรมชาติ
         """)
-                    st.markdown("---")
+        st.markdown("---")
     else:
         st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
     
@@ -210,7 +210,7 @@ def main():
                 
                 if file_size_mb > 200:
                     st.error(f"⚠️ File too large: {file_size_mb:.1f}MB. Maximum allowed: 200MB (free tier limit)")
-                                        else:
+                else:
                     # Save uploaded file temporarily
                     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
                     tfile.write(uploaded_file.read())
@@ -257,7 +257,7 @@ def main():
                 with st.expander(f"📹 {video_info['name']} - Uploaded by {video_info['uploaded_by']} at {video_info['upload_time']}", expanded=False):
                     col1, col2, col3 = st.columns([2, 1, 1])
                     
-        with col1:
+                    with col1:
                         st.write(f"**File:** {video_info['name']}")
                         st.write(f"**Uploaded by:** {video_info['uploaded_by']}")
                         st.write(f"**Time:** {video_info['upload_time']}")
@@ -271,7 +271,7 @@ def main():
                         # Download button
                         if os.path.exists(video_info['path']):
                             with open(video_info['path'], 'rb') as f:
-        st.download_button(
+                                st.download_button(
                                     label="📥 Download Video",
                                     data=f.read(),
                                     file_name=video_info['name'],
