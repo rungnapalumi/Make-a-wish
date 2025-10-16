@@ -15,7 +15,7 @@ if os.path.exists(demo_video_path):
     st.video(demo_video_path)
     
     # Add Thai instructions under the video
-            st.markdown("---")
+    st.markdown("---")
     st.markdown("""
     เป็นที่ทราบกันดีอยู่ว่าในการสื่อสารนั้นคำพูดให้ข้อมูล ส่วนภาษากายที่ไม่ว่าจะเป็น สายตาการเคลื่อนไหว 
     ของลำตัว ศรีษะ มือ แขนและขา บอกผู้ฟังถึงอารมณ์และความรู้สึกของผู้พูด
@@ -33,8 +33,8 @@ if os.path.exists(demo_video_path):
     
     **หมายเหตุ:** ในการตอบคำถามต่างๆขอให้ตอบอย่างละเอียด และเคลื่อนไหวเป็นธรรมชาติ
     """)
-                    st.markdown("---")
-                                        else:
+    st.markdown("---")
+else:
     st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
 
 st.header("🎥 Upload Your Video")
