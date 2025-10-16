@@ -45,4 +45,4 @@ else:
 # Second Demo Video Section - YouTube Example
 st.header("🎥 ตัวอย่างการอัดวีดีโอ")
 st.markdown("**ตัวอย่างการอัดวีดีโอที่ชัดเจนโดยเห็นทั้งลำตัวและการเคลื่อนไหวที่ชัดเจน**")
-st.video("https://youtube.com/shorts/R5JAHNbXPYs?si=5G94SPEwv2naAOzj")
+st.video("https://www.youtube.com/watch?v=R5JAHNbXPYs")
