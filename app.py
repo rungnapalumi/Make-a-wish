@@ -1,18 +1,15 @@
-import os, tempfile, subprocess, gc, math, csv
+import os, tempfile, gc
 from datetime import datetime
 import streamlit as st
 import cv2
 import numpy as np
 
-# ---- Strongly recommended env (also set in Render "Environment"):
+# ---- Memory optimization environment variables
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
 os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
-
-# Optional: Streamlit upload limit (MB). This is NOT RAM, just file size gate.
-os.environ.setdefault("STREAMLIT_SERVER_MAX_UPLOAD_SIZE", "1000")
 
 # Custom CSS to change background color
 st.markdown("""
@@ -75,122 +72,43 @@ def save_upload_to_disk(uploaded, suffix):
             tmp.write(chunk)
         return tmp.name
 
-def transcode_to_720p_mp4(in_path):
-    """MOV/MP4 -> H.264 mp4, 720p, 24fps, faststart; returns new path."""
-    out_path = in_path + ".720p.mp4"
-    cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", in_path,
-        "-vf", "scale='min(1280,iw)':-2",    # cap width at 1280, keep AR
-        "-r", "24",                          # cap FPS
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
-        "-movflags", "+faststart",
-        "-an",                               # drop audio (saves mem/CPU)
-        out_path
-    ]
-    subprocess.run(cmd, check=True)
-    return out_path
-
-def memory_safe_process(video_path, out_path, csv_path):
-    """Read-Process-Write per frame. No accumulation in memory."""
+def basic_video_processing(video_path):
+    """Basic video processing without MediaPipe - just show frames."""
     cv2.setNumThreads(1)
-
+    
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError("Cannot open video")
-
-    # Output writer (MP4V keeps mem low and is widely supported)
-    w  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h  = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS) or 24
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
-
-    # CSV write streaming
-    csvf = open(csv_path, "w", newline="", encoding="utf-8")
-    writer = csv.writer(csvf)
-    writer.writerow(["frame", "time_s", "movement"])
-
-    # ---- import mediapipe lazily to avoid early alloc
-    try:
-        import mediapipe as mp
-        mp_pose = mp.solutions.pose
-        mediapipe_available = True
-    except ImportError:
-        mediapipe_available = False
-        st.warning("⚠️ MediaPipe not available - running in basic mode")
-
-    frame_idx = 0
     
-    if mediapipe_available:
-        with mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            enable_segmentation=False,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        ) as pose:
-            pbar = st.progress(0.0, text="Processing frames…")
-            total = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 1
-
-            while True:
-                ok, frame = cap.read()
-                if not ok:
-                    break
-
-                # MediaPipe expects RGB
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                result = pose.process(rgb)
-
-                # Draw light-weight landmarks (avoid heavy utils drawing if needed)
-                if result.pose_landmarks:
-                    for lm in result.pose_landmarks.landmark:
-                        # tiny dot draw (very cheap)
-                        x = int(lm.x * w); y = int(lm.y * h)
-                        if 0 <= x < w and 0 <= y < h:
-                            cv2.circle(frame, (x, y), 1, (255, 255, 255), -1)
-
-                # Example movement tag (stub): write something cheap to CSV
-                t = frame_idx / fps
-                movement = "neutral"  # replace with your rule-based tag
-                writer.writerow([frame_idx, f"{t:.2f}", movement])
-
-                out.write(frame)
-
-                # Periodic GC to keep RSS stable on 512 MB
-                if frame_idx % 60 == 0:
-                    del rgb
-                    gc.collect()
-
-                frame_idx += 1
-                pbar.progress(min(frame_idx / total, 1.0))
-    else:
-        # Basic mode without MediaPipe
-        pbar = st.progress(0.0, text="Processing frames (basic mode)…")
-        total = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 1
-        
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            
-            t = frame_idx / fps
-            movement = "neutral"
-            writer.writerow([frame_idx, f"{t:.2f}", movement])
-            out.write(frame)
-            
-            if frame_idx % 60 == 0:
-                gc.collect()
-            
-            frame_idx += 1
-            pbar.progress(min(frame_idx / total, 1.0))
-
-    cap.release(); out.release(); csvf.close()
+    # Get video info
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    st.info(f"📹 Video Info: {frame_count} frames, {fps:.1f} FPS, {width}x{height}")
+    
+    # Show first frame as preview
+    ret, frame = cap.read()
+    if ret:
+        # Convert BGR to RGB for Streamlit
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        st.image(frame_rgb, caption="First frame preview", use_column_width=True)
+    
+    cap.release()
     gc.collect()
+    
+    return {
+        'frame_count': frame_count,
+        'fps': fps,
+        'width': width,
+        'height': height,
+        'duration': frame_count / fps
+    }
 
 def main():
     st.title("🎬 AI People Reader - Motion Detection & Analysis")
-    st.markdown("Upload a video to detect and analyze motion patterns with skeleton overlay")
+    st.markdown("Upload a video to detect and analyze motion patterns")
     
     # Candidate Name Input at the top
     st.subheader("📝 Report Details")
@@ -321,7 +239,7 @@ def main():
         else:
             st.info("👤 User Mode: Upload videos for admin review")
         
-        f = st.file_uploader("Upload video (limit ~1 GB per file)", type=["mp4","mov","m4v","avi"])
+        f = st.file_uploader("Upload video (limit 200MB per file)", type=["mp4","mov","m4v","avi"])
         
         if f:
             suffix = "." + f.name.split(".")[-1].lower()
@@ -329,37 +247,40 @@ def main():
             st.info(f"✅ Saved upload: {f.name}")
             
             try:
-                # Transcode first to shrink memory footprint while decoding
-                st.write("⚙️ Transcoding to 720p / 24fps for stable processing…")
-                small_path = transcode_to_720p_mp4(src_path)
+                # Basic video processing
+                st.write("🔍 Analyzing video...")
+                video_info = basic_video_processing(src_path)
                 
-                # Output paths
-                out_vid = small_path.replace(".mp4", ".out.mp4")
-                out_csv = small_path.replace(".mp4", ".timestamps.csv")
+                # Display video
+                st.video(src_path)
+                
+                # Show video statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Duration", f"{video_info['duration']:.1f}s")
+                with col2:
+                    st.metric("Frames", f"{video_info['frame_count']:,}")
+                with col3:
+                    st.metric("FPS", f"{video_info['fps']:.1f}")
+                with col4:
+                    st.metric("Resolution", f"{video_info['width']}x{video_info['height']}")
                 
                 if st.session_state['user_role'] == 'admin':
-                    st.write("🔍 Analyzing with MediaPipe (frame-by-frame, no caching)…")
-                    memory_safe_process(small_path, out_vid, out_csv)
-                    
-                    st.success("✅ Analysis complete!")
-                    st.video(out_vid)
-                    
-                    with open(out_csv, "rb") as fh:
-                        st.download_button(
-                            "📥 Download timestamps CSV", 
-                            fh, 
-                            file_name=os.path.basename(out_csv),
-                            mime="text/csv"
-                        )
+                    st.success("✅ Admin: Video analysis complete!")
+                    st.info("🚧 Advanced MediaPipe features coming soon!")
                 else:
                     st.success("✅ Video uploaded successfully!")
-                    st.video(small_path)
                     st.info("📝 Your video will remain on the system until admin downloads and removes it.")
                     
             except Exception as e:
                 st.error(f"⚠️ Processing error: {e}")
             finally:
                 # Cleanup temp files
+                try:
+                    if os.path.exists(src_path):
+                        os.unlink(src_path)
+                except:
+                    pass
                 gc.collect()
 
 if __name__ == "__main__":
