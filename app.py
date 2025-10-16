@@ -137,7 +137,7 @@ def main():
                 if username == "admin" and password == "0108":
                     st.session_state['user_role'] = 'admin'
                     st.success("✅ Admin login successful!")
-                else:
+                    else:
                     st.session_state['user_role'] = 'user'
                     st.success("✅ User login successful!")
             else:
@@ -163,7 +163,7 @@ def main():
         st.video(demo_video_path)
         
         # Add Thai instructions under the video
-        st.markdown("---")
+            st.markdown("---")
         st.markdown("""
         เป็นที่ทราบกันดีอยู่ว่าในการสื่อสารนั้นคำพูดให้ข้อมูล ส่วนภาษากายที่ไม่ว่าจะเป็น สายตาการเคลื่อนไหว 
         ของลำตัว ศรีษะ มือ แขนและขา บอกผู้ฟังถึงอารมณ์และความรู้สึกของผู้พูด
@@ -181,7 +181,7 @@ def main():
         
         **หมายเหตุ:** ในการตอบคำถามต่างๆขอให้ตอบอย่างละเอียด และเคลื่อนไหวเป็นธรรมชาติ
         """)
-        st.markdown("---")
+                    st.markdown("---")
     else:
         st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
     
@@ -200,17 +200,17 @@ def main():
         else:
             st.info("👤 User Mode: Upload videos for admin review")
         
-        uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'mov', 'avi'], help="Maximum file size: 900MB")
+        uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'mov', 'avi'], help="Maximum file size: 200MB (for free tier)")
         
         if uploaded_file is not None:
             try:
-                # Check file size (900MB limit)
+                # Check file size (200MB limit for free tier)
                 file_size_mb = len(uploaded_file.read()) / (1024 * 1024)
                 uploaded_file.seek(0)  # Reset file pointer
                 
-                if file_size_mb > 900:
-                    st.error(f"⚠️ File too large: {file_size_mb:.1f}MB. Maximum allowed: 900MB")
-                else:
+                if file_size_mb > 200:
+                    st.error(f"⚠️ File too large: {file_size_mb:.1f}MB. Maximum allowed: 200MB (free tier limit)")
+                                        else:
                     # Save uploaded file temporarily
                     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
                     tfile.write(uploaded_file.read())
@@ -257,7 +257,7 @@ def main():
                 with st.expander(f"📹 {video_info['name']} - Uploaded by {video_info['uploaded_by']} at {video_info['upload_time']}", expanded=False):
                     col1, col2, col3 = st.columns([2, 1, 1])
                     
-                    with col1:
+        with col1:
                         st.write(f"**File:** {video_info['name']}")
                         st.write(f"**Uploaded by:** {video_info['uploaded_by']}")
                         st.write(f"**Time:** {video_info['upload_time']}")
@@ -271,7 +271,7 @@ def main():
                         # Download button
                         if os.path.exists(video_info['path']):
                             with open(video_info['path'], 'rb') as f:
-                                st.download_button(
+        st.download_button(
                                     label="📥 Download Video",
                                     data=f.read(),
                                     file_name=video_info['name'],
