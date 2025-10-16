@@ -137,7 +137,7 @@ def main():
                 if username == "admin" and password == "0108":
                     st.session_state['user_role'] = 'admin'
                     st.success("✅ Admin login successful!")
-                    else:
+                else:
                     st.session_state['user_role'] = 'user'
                     st.success("✅ User login successful!")
             else:
