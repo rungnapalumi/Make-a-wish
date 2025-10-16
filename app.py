@@ -39,14 +39,44 @@ else:
 
 st.header("🎥 Upload Your Video")
 
-uploaded_file = st.file_uploader("Choose a video file", type=["mp4", "mov", "avi", "mpeg4"])
+st.info("💡 **Tip**: For large videos (>100MB), try compressing them first or use a smaller test file.")
+
+uploaded_file = st.file_uploader(
+    "Choose a video file", 
+    type=["mp4", "mov", "avi", "mpeg4"],
+    help="Large files may take time to upload. Be patient!"
+)
 
 if uploaded_file is not None:
-    # Save file to a temp path
-    suffix = os.path.splitext(uploaded_file.name)[1]
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(uploaded_file.read())
-        temp_path = tmp.name
+    try:
+        # Show file info first
+        file_size = len(uploaded_file.getvalue())
+        file_size_mb = file_size / (1024 * 1024)
+        
+        st.info(f"📁 File: {uploaded_file.name} ({file_size_mb:.1f} MB)")
+        
+        # Check file size
+        if file_size_mb > 500:
+            st.warning("⚠️ Large file detected. Upload may take time or fail.")
+            st.write("Consider compressing the video to under 500MB for better success.")
+        
+        # Save file to a temp path
+        with st.spinner("💾 Saving file..."):
+            suffix = os.path.splitext(uploaded_file.name)[1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(uploaded_file.getvalue())
+                temp_path = tmp.name
 
-    st.success(f"✅ File uploaded successfully: {uploaded_file.name}")
-    st.video(temp_path)
+        st.success(f"✅ File uploaded successfully: {uploaded_file.name}")
+        
+        # Try to display video
+        try:
+            st.video(temp_path)
+            st.success("🎥 Video display successful!")
+        except Exception as e:
+            st.warning(f"Video display issue: {e}")
+            st.info("File uploaded but video preview failed. This is normal for large files.")
+            
+    except Exception as e:
+        st.error(f"❌ Upload failed: {str(e)}")
+        st.info("💡 Try a smaller file or compress your video first.")
