@@ -1,14 +1,13 @@
-streamlit>=1.28.0
-opencv-python>=4.8.0
-mediapipe>=0.10.0
-numpy>=1.24.0
-pandas>=2.0.0
-python-docx>=1.1.0
-plotly>=5.17.0
-kaleido>=1.1.0
-matplotlib>=3.7.0
-openpyxl>=3.1.0
-Pillow>=10.0.0
+streamlit
+opencv-python
+numpy
+pandas
+python-docx
+plotly
+kaleido
+matplotlib
+openpyxl
+Pillow
 
 
 
