@@ -1,9 +1,9 @@
 import streamlit as st
 import os
 
-st.set_page_config(page_title="Video Submission", layout="wide")
+st.set_page_config(page_title="AI People Reader", layout="wide")
 
-st.title("🎬 AI People Reader - Video Submission System")
+st.title("🎬 AI People Reader")
 
 # Demo Video Section
 st.header("📹 Demo Video")
@@ -41,3 +41,8 @@ if os.path.exists(demo_video_path):
     st.markdown("---")
 else:
     st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
+
+# Second Demo Video Section - YouTube Example
+st.header("🎥 ตัวอย่างการอัดวีดีโอ")
+st.markdown("**ตัวอย่างการอัดวีดีโอที่ชัดเจนโดยเห็นทั้งลำตัวและการเคลื่อนไหวที่ชัดเจน**")
+st.video("https://youtube.com/shorts/R5JAHNbXPYs?si=5G94SPEwv2naAOzj")
