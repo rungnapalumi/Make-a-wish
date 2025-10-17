@@ -37,9 +37,11 @@ def save_users(users):
         os.makedirs(os.path.dirname(USER_DATA_FILE) if os.path.dirname(USER_DATA_FILE) else '.', exist_ok=True)
         with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
+        print(f"✅ Users saved to {USER_DATA_FILE}: {len(users)} users")  # Debug log
+        return True
     except Exception as e:
-        # If file save fails, continue without saving (for demo purposes)
-        pass
+        print(f"❌ Failed to save users: {e}")  # Debug log
+        return False
 
 # Initialize session state
 if 'authenticated' not in st.session_state:
@@ -100,11 +102,11 @@ if st.session_state.user_role == 'admin':
                 if new_username and new_password:
                     if new_username not in st.session_state.users:
                         st.session_state.users[new_username] = new_password
-                        try:
-                            save_users(st.session_state.users)  # Save to file
-                        except:
-                            pass  # Continue even if file save fails
-                        st.success(f"✅ User '{new_username}' created successfully!")
+                        save_success = save_users(st.session_state.users)  # Save to file
+                        if save_success:
+                            st.success(f"✅ User '{new_username}' created and saved successfully!")
+                        else:
+                            st.warning(f"⚠️ User '{new_username}' created but failed to save to file!")
                         st.rerun()  # Refresh to show updated user list
                     else:
                         st.error("❌ Username already exists!")
@@ -181,11 +183,11 @@ if st.session_state.user_role == 'admin':
                                 imported_count += 1
                         
                         # Save to file
-                        try:
-                            save_users(st.session_state.users)
-                        except:
-                            pass
-                        st.success(f"✅ Imported {imported_count} users successfully!")
+                        save_success = save_users(st.session_state.users)
+                        if save_success:
+                            st.success(f"✅ Imported {imported_count} users and saved successfully!")
+                        else:
+                            st.warning(f"⚠️ Imported {imported_count} users but failed to save to file!")
                         st.rerun()
                         
                 else:
@@ -213,19 +215,55 @@ if st.session_state.user_role == 'admin':
         if change_button and new_password:
             if selected_user != 'admin' or st.session_state.user_role == 'admin':
                 st.session_state.users[selected_user] = new_password
-                try:
-                    save_users(st.session_state.users)
-                except:
-                    pass
-                st.success(f"✅ Password for '{selected_user}' changed successfully!")
+                save_success = save_users(st.session_state.users)
+                if save_success:
+                    st.success(f"✅ Password for '{selected_user}' changed and saved successfully!")
+                else:
+                    st.warning(f"⚠️ Password for '{selected_user}' changed but failed to save to file!")
                 st.rerun()
             else:
                 st.error("❌ Cannot change admin password!")
+    
+    # File Status Section
+    st.markdown("---")
+    st.subheader("💾 Storage Status")
+    
+    # Check if file exists and is readable
+    file_exists = os.path.exists(USER_DATA_FILE)
+    file_readable = False
+    file_users = {}
+    
+    if file_exists:
+        try:
+            with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
+                file_users = json.load(f)
+                file_readable = True
+        except:
+            file_readable = False
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write(f"**File Status:** {'✅ Exists' if file_exists else '❌ Missing'}")
+    
+    with col2:
+        st.write(f"**File Readable:** {'✅ Yes' if file_readable else '❌ No'}")
+    
+    with col3:
+        st.write(f"**Users in File:** {len(file_users)}")
+    
+    if file_users:
+        st.write("**Users stored in file:**")
+        for username, password in file_users.items():
+            st.write(f"👤 {username} {'(Admin)' if username == 'admin' else '(User)'}")
     
     # Debug info (remove this in production)
     with st.expander("Debug Info"):
         st.write(f"Total users: {len(st.session_state.users)}")
         st.write(f"Users dict: {st.session_state.users}")
+        st.write(f"File path: {USER_DATA_FILE}")
+        st.write(f"File exists: {file_exists}")
+        st.write(f"File readable: {file_readable}")
 
 st.markdown("---")
 
