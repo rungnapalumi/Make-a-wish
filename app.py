@@ -5,6 +5,78 @@ st.set_page_config(page_title="AI People Reader", layout="wide")
 
 st.title("🎬 AI People Reader")
 
+# Initialize session state
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = None
+if 'users' not in st.session_state:
+    st.session_state.users = {'admin': '0108'}  # Default admin user
+
+# Login Section
+if not st.session_state.authenticated:
+    st.header("🔐 Login Required")
+    
+    with st.form("login_form"):
+        st.subheader("Please login to access the content")
+        username = st.text_input("Username:")
+        password = st.text_input("Password:", type="password")
+        login_button = st.form_submit_button("Login", type="primary")
+        
+        if login_button:
+            if username in st.session_state.users and st.session_state.users[username] == password:
+                st.session_state.authenticated = True
+                if username == 'admin':
+                    st.session_state.user_role = 'admin'
+                else:
+                    st.session_state.user_role = 'user'
+                st.success("✅ Login successful!")
+                st.rerun()
+            else:
+                st.error("❌ Invalid username or password")
+    
+    st.stop()  # Stop execution if not authenticated
+
+# Logout and Admin Functions
+col1, col2 = st.columns([1, 1])
+with col1:
+    if st.button("🚪 Logout"):
+        st.session_state.authenticated = False
+        st.session_state.user_role = None
+        st.rerun()
+
+with col2:
+    if st.session_state.user_role == 'admin':
+        st.write("👑 Admin Access")
+
+# Admin Section - User Management
+if st.session_state.user_role == 'admin':
+    st.markdown("---")
+    st.header("👑 Admin Panel - User Management")
+    
+    with st.expander("Create New User"):
+        with st.form("create_user_form"):
+            new_username = st.text_input("New Username:")
+            new_password = st.text_input("New Password:", type="password")
+            create_button = st.form_submit_button("Create User")
+            
+            if create_button:
+                if new_username and new_password:
+                    if new_username not in st.session_state.users:
+                        st.session_state.users[new_username] = new_password
+                        st.success(f"✅ User '{new_username}' created successfully!")
+                    else:
+                        st.error("❌ Username already exists!")
+                else:
+                    st.error("❌ Please fill in both username and password")
+    
+    # Display current users
+    st.subheader("Current Users:")
+    for username, password in st.session_state.users.items():
+        st.write(f"👤 {username} {'(Admin)' if username == 'admin' else '(User)'}")
+
+st.markdown("---")
+
 # Demo Video Section
 st.header("📹 Demo Video")
 st.markdown("**Video Interview Simulation** - Sample video for demonstration")
