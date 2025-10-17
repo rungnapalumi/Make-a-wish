@@ -188,7 +188,7 @@ if st.session_state.user_role == 'admin':
                         st.success(f"✅ Imported {imported_count} users successfully!")
                         st.rerun()
                         
-            else:
+                else:
                     st.error("❌ Excel file must have 'Username' and 'Password' columns!")
                     
             except Exception as e:
@@ -227,7 +227,7 @@ if st.session_state.user_role == 'admin':
         st.write(f"Total users: {len(st.session_state.users)}")
         st.write(f"Users dict: {st.session_state.users}")
 
-            st.markdown("---")
+st.markdown("---")
 
 # Demo Video Section
 st.header("📹 Demo Video")
@@ -238,7 +238,7 @@ if os.path.exists(demo_video_path):
     st.video(demo_video_path)
     
     # Add Thai instructions under the video
-                    st.markdown("---")
+    st.markdown("---")
     st.markdown("""
     เป็นที่ทราบกันดีอยู่ว่าในการสื่อสารนั้นคำพูดให้ข้อมูล ส่วนภาษากายที่ไม่ว่าจะเป็น สายตา การเคลื่อนไหวของลำตัว ศรีษะ มือ แขนและขา บอกผู้ฟังถึงอารมณ์และความรู้สึกของผู้พูด
     
@@ -262,7 +262,7 @@ if os.path.exists(demo_video_path):
     - rungnapa@imagematters.at
     """)
     st.markdown("---")
-                                        else:
+else:
     st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
 
 # Second Demo Video Section - YouTube Example
