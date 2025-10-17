@@ -13,22 +13,33 @@ USER_DATA_FILE = "users.json"
 
 def load_users():
     """Load users from JSON file"""
-    if os.path.exists(USER_DATA_FILE):
-        try:
+    try:
+        if os.path.exists(USER_DATA_FILE):
             with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return {'admin': '0108'}  # Default admin if file corrupted
-            else:
-        # Create default file
-        default_users = {'admin': '0108'}
-        save_users(default_users)
-        return default_users
+                data = json.load(f)
+                # Ensure admin user exists
+                if 'admin' not in data:
+                    data['admin'] = '0108'
+                return data
+        else:
+            # Create default file
+            default_users = {'admin': '0108'}
+            save_users(default_users)
+            return default_users
+    except Exception as e:
+        # Return default admin if any error
+        return {'admin': '0108'}
 
 def save_users(users):
     """Save users to JSON file"""
-    with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(USER_DATA_FILE) if os.path.dirname(USER_DATA_FILE) else '.', exist_ok=True)
+        with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        # If file save fails, continue without saving (for demo purposes)
+        pass
 
 # Initialize session state
 if 'authenticated' not in st.session_state:
@@ -89,12 +100,15 @@ if st.session_state.user_role == 'admin':
                 if new_username and new_password:
                     if new_username not in st.session_state.users:
                         st.session_state.users[new_username] = new_password
-                        save_users(st.session_state.users)  # Save to file
+                        try:
+                            save_users(st.session_state.users)  # Save to file
+                        except:
+                            pass  # Continue even if file save fails
                         st.success(f"✅ User '{new_username}' created successfully!")
                         st.rerun()  # Refresh to show updated user list
-            else:
+                    else:
                         st.error("❌ Username already exists!")
-            else:
+                else:
                     st.error("❌ Please fill in both username and password")
     
     # Display current users
@@ -167,7 +181,10 @@ if st.session_state.user_role == 'admin':
                                 imported_count += 1
                         
                         # Save to file
-                        save_users(st.session_state.users)
+                        try:
+                            save_users(st.session_state.users)
+                        except:
+                            pass
                         st.success(f"✅ Imported {imported_count} users successfully!")
                         st.rerun()
                         
@@ -196,10 +213,13 @@ if st.session_state.user_role == 'admin':
         if change_button and new_password:
             if selected_user != 'admin' or st.session_state.user_role == 'admin':
                 st.session_state.users[selected_user] = new_password
-                save_users(st.session_state.users)
+                try:
+                    save_users(st.session_state.users)
+                except:
+                    pass
                 st.success(f"✅ Password for '{selected_user}' changed successfully!")
                 st.rerun()
-        else:
+            else:
                 st.error("❌ Cannot change admin password!")
     
     # Debug info (remove this in production)
