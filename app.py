@@ -267,5 +267,5 @@ else:
 
 # Second Demo Video Section - YouTube Example
 st.header("🎥 ตัวอย่างการอัดวีดีโอ")
-st.markdown("**ตัวอย่างการอัดวีดีโอที่ชัดเจนโดยเห็นทั้งลำตัวและการเคลื่อนไหวที่ชัดเจน**")
+st.markdown("**สามารถดูตัวอย่างวิธีการตั้งกล้อง การเลือก background การถ่ายวีดีโอได้ที่**")
 st.video("https://www.youtube.com/watch?v=c8wc8pEr-f0")
