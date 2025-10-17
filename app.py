@@ -64,7 +64,7 @@ if not st.session_state.authenticated:
                 st.session_state.authenticated = True
                 if username == 'admin':
                     st.session_state.user_role = 'admin'
-    else:
+                else:
                     st.session_state.user_role = 'user'
                 st.success("✅ Login successful!")
                 st.rerun()
