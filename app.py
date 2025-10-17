@@ -1,9 +1,34 @@
 import streamlit as st
 import os
+import json
+import pandas as pd
+import io
 
 st.set_page_config(page_title="AI People Reader", layout="wide")
 
 st.title("🎬 AI People Reader")
+
+# User data file
+USER_DATA_FILE = "users.json"
+
+def load_users():
+    """Load users from JSON file"""
+    if os.path.exists(USER_DATA_FILE):
+        try:
+            with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {'admin': '0108'}  # Default admin if file corrupted
+            else:
+        # Create default file
+        default_users = {'admin': '0108'}
+        save_users(default_users)
+        return default_users
+
+def save_users(users):
+    """Save users to JSON file"""
+    with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
 
 # Initialize session state
 if 'authenticated' not in st.session_state:
@@ -11,7 +36,7 @@ if 'authenticated' not in st.session_state:
 if 'user_role' not in st.session_state:
     st.session_state.user_role = None
 if 'users' not in st.session_state:
-    st.session_state.users = {'admin': '0108'}  # Default admin user
+    st.session_state.users = load_users()
 
 # Login Section
 if not st.session_state.authenticated:
@@ -28,7 +53,7 @@ if not st.session_state.authenticated:
                 st.session_state.authenticated = True
                 if username == 'admin':
                     st.session_state.user_role = 'admin'
-                else:
+    else:
                     st.session_state.user_role = 'user'
                 st.success("✅ Login successful!")
                 st.rerun()
@@ -64,18 +89,125 @@ if st.session_state.user_role == 'admin':
                 if new_username and new_password:
                     if new_username not in st.session_state.users:
                         st.session_state.users[new_username] = new_password
+                        save_users(st.session_state.users)  # Save to file
                         st.success(f"✅ User '{new_username}' created successfully!")
-                    else:
+                        st.rerun()  # Refresh to show updated user list
+            else:
                         st.error("❌ Username already exists!")
-                else:
+            else:
                     st.error("❌ Please fill in both username and password")
     
     # Display current users
     st.subheader("Current Users:")
-    for username, password in st.session_state.users.items():
-        st.write(f"👤 {username} {'(Admin)' if username == 'admin' else '(User)'}")
+    if st.session_state.users:
+        for username, password in st.session_state.users.items():
+            st.write(f"👤 {username} {'(Admin)' if username == 'admin' else '(User)'}")
+    else:
+        st.write("No users found.")
+    
+    # Excel Export/Import Section
+    st.markdown("---")
+    st.subheader("📊 Excel User Management")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**📤 Export Users to Excel**")
+        if st.button("Download Excel File"):
+            # Create DataFrame
+            users_data = []
+            for username, password in st.session_state.users.items():
+                users_data.append({
+                    'Username': username,
+                    'Password': password,
+                    'Role': 'Admin' if username == 'admin' else 'User'
+                })
+            
+            df = pd.DataFrame(users_data)
+            
+            # Create Excel file in memory
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Users', index=False)
+            
+            # Download button
+            st.download_button(
+                label="📥 Download users.xlsx",
+                data=output.getvalue(),
+                file_name="users.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+    
+    with col2:
+        st.write("**📥 Import Users from Excel**")
+        uploaded_file = st.file_uploader("Choose Excel file", type=['xlsx', 'xls'])
+        
+        if uploaded_file is not None:
+            try:
+                # Read Excel file
+                df = pd.read_excel(uploaded_file)
+                
+                # Validate columns
+                required_columns = ['Username', 'Password']
+                if all(col in df.columns for col in required_columns):
+                    st.success(f"✅ File loaded successfully! Found {len(df)} users.")
+                    
+                    # Show preview
+                    st.write("**Preview:**")
+                    st.dataframe(df.head())
+                    
+                    if st.button("Import Users"):
+                        imported_count = 0
+                        for _, row in df.iterrows():
+                            username = str(row['Username']).strip()
+                            password = str(row['Password']).strip()
+                            
+                            if username and password:
+                                st.session_state.users[username] = password
+                                imported_count += 1
+                        
+                        # Save to file
+                        save_users(st.session_state.users)
+                        st.success(f"✅ Imported {imported_count} users successfully!")
+                        st.rerun()
+                        
+            else:
+                    st.error("❌ Excel file must have 'Username' and 'Password' columns!")
+                    
+            except Exception as e:
+                st.error(f"❌ Error reading Excel file: {str(e)}")
+    
+    # Manual Password Change Section
+    st.markdown("---")
+    st.subheader("🔑 Change User Password")
+    
+    with st.form("change_password_form"):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            selected_user = st.selectbox("Select User:", list(st.session_state.users.keys()))
+        
+        with col2:
+            new_password = st.text_input("New Password:", type="password")
+        
+        with col3:
+            change_button = st.form_submit_button("Change Password")
+        
+        if change_button and new_password:
+            if selected_user != 'admin' or st.session_state.user_role == 'admin':
+                st.session_state.users[selected_user] = new_password
+                save_users(st.session_state.users)
+                st.success(f"✅ Password for '{selected_user}' changed successfully!")
+                st.rerun()
+        else:
+                st.error("❌ Cannot change admin password!")
+    
+    # Debug info (remove this in production)
+    with st.expander("Debug Info"):
+        st.write(f"Total users: {len(st.session_state.users)}")
+        st.write(f"Users dict: {st.session_state.users}")
 
-st.markdown("---")
+            st.markdown("---")
 
 # Demo Video Section
 st.header("📹 Demo Video")
@@ -86,7 +218,7 @@ if os.path.exists(demo_video_path):
     st.video(demo_video_path)
     
     # Add Thai instructions under the video
-    st.markdown("---")
+                    st.markdown("---")
     st.markdown("""
     เป็นที่ทราบกันดีอยู่ว่าในการสื่อสารนั้นคำพูดให้ข้อมูล ส่วนภาษากายที่ไม่ว่าจะเป็น สายตา การเคลื่อนไหวของลำตัว ศรีษะ มือ แขนและขา บอกผู้ฟังถึงอารมณ์และความรู้สึกของผู้พูด
     
@@ -110,7 +242,7 @@ if os.path.exists(demo_video_path):
     - rungnapa@imagematters.at
     """)
     st.markdown("---")
-else:
+                                        else:
     st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
 
 # Second Demo Video Section - YouTube Example
