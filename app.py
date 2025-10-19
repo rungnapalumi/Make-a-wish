@@ -13,44 +13,82 @@ st.title("🎬 AI People Reader")
 USER_DATA_FILE = "users.json"
 
 def load_users():
-    """Load users from JSON file"""
+    """Load users from JSON file with persistent storage"""
     try:
+        # First try to load from file
         if os.path.exists(USER_DATA_FILE):
             with open(USER_DATA_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 # Ensure admin user exists
                 if 'admin' not in data:
                     data['admin'] = '0108'
+                    save_users(data)  # Save the updated data
                 return data
         else:
-            # Create default file
+            # Create default file with admin user
             default_users = {'admin': '0108'}
             save_users(default_users)
             return default_users
     except Exception as e:
+        print(f"❌ Error loading users: {e}")
         # Return default admin if any error
         return {'admin': '0108'}
 
 def save_users(users):
-    """Save users to JSON file"""
+    """Save users to JSON file with error handling"""
     try:
         # Ensure directory exists
         os.makedirs(os.path.dirname(USER_DATA_FILE) if os.path.dirname(USER_DATA_FILE) else '.', exist_ok=True)
+        
+        # Create a backup of existing file
+        if os.path.exists(USER_DATA_FILE):
+            backup_file = f"{USER_DATA_FILE}.backup"
+            with open(USER_DATA_FILE, 'r', encoding='utf-8') as original:
+                with open(backup_file, 'w', encoding='utf-8') as backup:
+                    backup.write(original.read())
+        
+        # Save new data
         with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
-        print(f"✅ Users saved to {USER_DATA_FILE}: {len(users)} users")  # Debug log
+        
+        print(f"✅ Users saved to {USER_DATA_FILE}: {len(users)} users")
         return True
     except Exception as e:
-        print(f"❌ Failed to save users: {e}")  # Debug log
+        print(f"❌ Failed to save users: {e}")
+        # Try to restore from backup if available
+        try:
+            backup_file = f"{USER_DATA_FILE}.backup"
+            if os.path.exists(backup_file):
+                with open(backup_file, 'r', encoding='utf-8') as backup:
+                    backup_data = json.load(backup)
+                with open(USER_DATA_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(backup_data, f, ensure_ascii=False, indent=2)
+                print("✅ Restored from backup")
+        except:
+            pass
         return False
 
-# Initialize session state
+def ensure_admin_exists():
+    """Ensure admin user always exists in the system"""
+    current_users = load_users()
+    if 'admin' not in current_users:
+        current_users['admin'] = '0108'
+        save_users(current_users)
+        print("✅ Admin user restored")
+    return current_users
+
+# Initialize session state with persistent user management
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user_role' not in st.session_state:
     st.session_state.user_role = None
 if 'users' not in st.session_state:
-    st.session_state.users = load_users()
+    st.session_state.users = ensure_admin_exists()
+else:
+    # Always ensure admin exists in session state
+    if 'admin' not in st.session_state.users:
+        st.session_state.users['admin'] = '0108'
+        save_users(st.session_state.users)
 
 # Login Section
 if not st.session_state.authenticated:
@@ -242,7 +280,7 @@ if st.session_state.user_role == 'admin':
         except:
             file_readable = False
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.write(f"**File Status:** {'✅ Exists' if file_exists else '❌ Missing'}")
@@ -253,10 +291,19 @@ if st.session_state.user_role == 'admin':
     with col3:
         st.write(f"**Users in File:** {len(file_users)}")
     
+    with col4:
+        if st.button("🔄 Refresh Storage"):
+            st.session_state.users = load_users()
+            st.success("✅ Storage refreshed!")
+            st.rerun()
+    
     if file_users:
         st.write("**Users stored in file:**")
         for username, password in file_users.items():
             st.write(f"👤 {username} {'(Admin)' if username == 'admin' else '(User)'}")
+    
+    # Storage persistence info
+    st.info("💡 **Note:** Users are saved permanently to the server. They will persist until manually deleted by an admin.")
     
     # Debug info (remove this in production)
     with st.expander("Debug Info"):
