@@ -6,6 +6,15 @@ import io
 
 st.set_page_config(page_title="AI People Reader", layout="wide")
 
+# Add grey background
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #f0f0f0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🎬 AI People Reader")
 
 # User data file
@@ -305,15 +314,6 @@ else:
     st.warning(f"⚠️ Instruction video '{instruction_video_path}' not found in the current directory.")
 
 st.markdown("---")
-st.markdown("**Video Interview Simulation** - Sample video for demonstration")
-
-demo_video_path = "Video Interview Simulation.mp4"
-if os.path.exists(demo_video_path):
-    st.video(demo_video_path)
-else:
-    st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
-
-# Second Demo Video Section - Example Video
 st.header("🎥 ตัวอย่างการอัดวีดีโอ")
 st.markdown("**สามารถดูตัวอย่างวิธีการตั้งกล้อง การเลือก background การถ่ายวีดีโอได้ที่**")
 
@@ -322,3 +322,12 @@ if os.path.exists(example_video_path):
     st.video(example_video_path)
 else:
     st.warning(f"⚠️ Example video '{example_video_path}' not found in the current directory.")
+
+st.markdown("---")
+st.markdown("**Video Interview Simulation** - Sample video for demonstration")
+
+demo_video_path = "Video Interview Simulation.mp4"
+if os.path.exists(demo_video_path):
+    st.video(demo_video_path)
+else:
+    st.warning(f"⚠️ Demo video '{demo_video_path}' not found in the current directory.")
