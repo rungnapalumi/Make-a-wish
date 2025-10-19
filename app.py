@@ -6,23 +6,6 @@ import io
 
 st.set_page_config(page_title="AI People Reader", layout="wide")
 
-# Add grey background with better contrast
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #f5f5f5;
-    }
-    .main .block-container {
-        background-color: #ffffff;
-        padding: 2rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .stMarkdown {
-        color: #333333;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 st.title("🎬 AI People Reader")
 
