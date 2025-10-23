@@ -388,6 +388,9 @@ st.markdown("---")
 st.markdown("**Video Interview Simulation** - Sample video for demonstration")
 
 demo_video_path = "interview simulation 5 min.mp4"
+st.write(f"🔍 Debug: Looking for video at: {demo_video_path}")
+st.write(f"🔍 Debug: Current directory: {os.getcwd()}")
+st.write(f"🔍 Debug: File exists: {os.path.exists(demo_video_path)}")
 if os.path.exists(demo_video_path):
     try:
         st.video(demo_video_path, format="video/mp4")
