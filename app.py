@@ -339,8 +339,8 @@ st.markdown("""
 ---
 
 **📧ส่งวิดีโอของคุณโดย upload ขึ้น Google Drive และ share มาที่ email ตามด้านล่าง**
-- alisa@imagematters.at
-- rungnapa@imagematters.at
+- alisa@imagemattersasia.com
+- petchpat@gmail.com
 """)
 
 st.markdown("---")
