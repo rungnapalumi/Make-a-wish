@@ -387,7 +387,7 @@ else:
 st.markdown("---")
 st.markdown("**Video Interview Simulation** - Sample video for demonstration")
 
-demo_video_path = "interview simulation 4 min.mp4"
+demo_video_path = "interview simulation 5 min.mp4"
 if os.path.exists(demo_video_path):
     try:
         st.video(demo_video_path, format="video/mp4")
