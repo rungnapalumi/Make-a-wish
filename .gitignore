@@ -4,6 +4,12 @@ __pycache__/
 *$py.class
 *.so
 .Python
+<<<<<<< HEAD
+=======
+env/
+venv/
+ENV/
+>>>>>>> 2f369dcd0813345a22f1051753c3cfd8b749a40a
 build/
 develop-eggs/
 dist/
@@ -20,21 +26,33 @@ wheels/
 .installed.cfg
 *.egg
 
+<<<<<<< HEAD
 # Virtual Environment
 venv/
 env/
 ENV/
 
 # IDE
+=======
+# Streamlit
+.streamlit/secrets.toml
+
+# IDEs
+>>>>>>> 2f369dcd0813345a22f1051753c3cfd8b749a40a
 .vscode/
 .idea/
 *.swp
 *.swo
+<<<<<<< HEAD
+=======
+*~
+>>>>>>> 2f369dcd0813345a22f1051753c3cfd8b749a40a
 
 # OS
 .DS_Store
 Thumbs.db
 
+<<<<<<< HEAD
 # Streamlit
 .streamlit/
 
@@ -44,3 +62,12 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+=======
+# Backup files
+*_backup.py
+app_backup.py
+
+# Environment variables
+.env
+
+>>>>>>> 2f369dcd0813345a22f1051753c3cfd8b749a40a

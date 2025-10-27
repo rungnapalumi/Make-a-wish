@@ -25,6 +25,7 @@ def load_users():
                     save_users(data)  # Save the updated data
                 return data
         else:
+<<<<<<< HEAD
             # Create default file with admin user and load initial users from PNG
             default_users = {'admin': '0108'}
             
@@ -39,6 +40,10 @@ def load_users():
             except Exception as e:
                 print(f"⚠️ Could not load initial users from PNG: {e}")
             
+=======
+            # Create default file with admin user
+            default_users = {'admin': '0108'}
+>>>>>>> 2f369dcd0813345a22f1051753c3cfd8b749a40a
             save_users(default_users)
             return default_users
     except Exception as e:
@@ -123,10 +128,13 @@ if not st.session_state.authenticated:
                 st.rerun()
             else:
                 st.error("❌ Invalid username or password")
+<<<<<<< HEAD
         
         # Add contact information below the login form
         st.markdown("---")
         st.markdown("หากมีปัญหาการ log in กรุณาติดต่อ 0817008484")
+=======
+>>>>>>> 2f369dcd0813345a22f1051753c3cfd8b749a40a
     
     st.stop()  # Stop execution if not authenticated
 
