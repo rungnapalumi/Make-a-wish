@@ -109,6 +109,10 @@ if not st.session_state.authenticated:
                 st.rerun()
             else:
                 st.error("❌ Invalid username or password")
+        
+        # Add contact information below the login form
+        st.markdown("---")
+        st.markdown("หากพบปัญหาการ log in กรุณาติดต่อ 0817008484")
     
     st.stop()  # Stop execution if not authenticated
 
