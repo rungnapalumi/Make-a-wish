@@ -3,7 +3,7 @@
 # ฟังก์ชันหลัก:
 # 1) ให้ผู้ใช้ upload วิดีโอสัมภาษณ์
 # 2) ส่งไฟล์ขึ้น S3 + สร้างไฟล์ job JSON ใน jobs/pending/
-# 3) ให้ worker.py ไปประมวลผลแล้วเขียนผลลัพธ์ที่ jobs/finished/{job_id}.json
+# 3) ให้ ai-people-reader-worker ไปประมวลผลแล้วเขียนผลลัพธ์ที่ jobs/finished/{job_id}.json
 # 4) หน้าเว็บสามารถใส่ job_id แล้วกด Check status เพื่อดูผลลัพธ์ / download report
 
 import os
@@ -48,7 +48,7 @@ def new_job_id() -> str:
 
 def upload_bytes_to_s3(data: bytes, key: str, content_type: Optional[str] = None) -> None:
     """อัปโหลด bytes ไป S3"""
-    extra_args = {}
+    extra_args: Dict[str, Any] = {}
     if content_type:
         extra_args["ContentType"] = content_type
 
@@ -171,16 +171,17 @@ if start_button:
         )
 
         # 2) สร้าง job record ให้ worker ใช้
-        job_record = {
+        #    IMPORTANT: worker ต้องการ field ชื่อ "input_key"
+        job_record: Dict[str, Any] = {
             "job_id": job_id,
+            "input_key": video_key,   # <-- ให้ worker ใช้โหลดวิดีโอ
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "status": "pending",
-            "input_video_key": video_key,
-            # ตรงนี้สามารถใส่ config เพิ่มตามที่ worker ต้องการได้
-            # ตัวอย่าง:
-            # "job_type": "make_a_wish_analysis",
-            # "params": {...}
             "user_note": note,
+            # ถ้า worker ใช้ค่าอื่น เช่น job_type, config, ฯลฯ
+            # สามารถเติมเพิ่มได้ตรงนี้
+            # "job_type": "dots_skeleton_report",
+            # "params": {...},
         }
 
         upload_bytes_to_s3(
@@ -256,7 +257,7 @@ if check_btn:
                     st.json(scores)
 
                 # หาก worker ส่ง S3 key ของ report มา
-                report_url = None
+                report_url: Optional[str] = None
 
                 # กรณี 1: มี URL โดยตรงใน JSON
                 if "report_url" in result:
