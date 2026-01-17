@@ -1,22 +1,24 @@
-# app.py — AI People Reader "Make a Wish" Webapp
-# ----------------------------------------------
-# ใช้ schema เดียวกับ App-maker-App-maker:
-# - create_job(): สร้าง job และเซฟที่ jobs/pending/<job_id>.json
-# - worker จะอ่านไฟล์นี้ไปประมวลผล แล้วเขียนผลลัพธ์ที่ jobs/finished/<job_id>.json
-# - output video อยู่ที่ jobs/output/<job_id>/result.mp4
+# app.py — AI People Reader (Make-a-wish - Dots Skeleton Report)
+#
+# หน้าที่หลัก:
+#   1) ให้ผู้ใช้ upload วิดีโอสัมภาษณ์ + ใส่ note (สำหรับคุณครู/ผู้ประเมิน)
+#   2) สร้าง job JSON (mode="dots") ตาม schema เดียวกับ worker.py
+#   3) เซฟ input video + job JSON ลง S3
+#   4) ให้ผู้ใช้กรอก Job ID เพื่อตรวจสถานะ และดาวน์โหลดวิดีโอที่ประมวลผลแล้ว
 
 import os
 import json
 import uuid
+import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-import streamlit as st
 import boto3
+import streamlit as st
 from botocore.exceptions import ClientError
 
 # ----------------------------------------------------------
-# AWS Config
+# Config
 # ----------------------------------------------------------
 
 AWS_BUCKET = os.environ.get("AWS_BUCKET") or os.environ.get("S3_BUCKET")
@@ -34,29 +36,18 @@ JOBS_FAILED_PREFIX = "jobs/failed/"
 JOBS_OUTPUT_PREFIX = "jobs/output/"
 
 # ----------------------------------------------------------
-# Streamlit config
+# Streamlit page
 # ----------------------------------------------------------
 
-st.set_page_config(page_title="AI People Reader - Make a Wish", layout="wide")
-st.title("🎬 AI People Reader – Make a Wish")
-
-st.markdown(
-    """
-1. อัปโหลดวิดีโอสัมภาษณ์ของคุณ  
-2. ระบบจะสร้าง Job ID และส่งไฟล์ไปให้ AI ประมวลผล  
-3. ใช้ Job ID เพื่อตรวจสอบสถานะ และดาวน์โหลดวิดีโอที่ประมวลผลแล้ว  
-
----
-"""
+st.set_page_config(
+    page_title="AI People Reader – Interview Analyzer",
+    layout="wide",
 )
 
-if "job_id" not in st.session_state:
-    st.session_state["job_id"] = ""
-
-
 # ----------------------------------------------------------
-# Helper functions (ใช้ schema เดียวกับ App-maker)
+# Helper functions
 # ----------------------------------------------------------
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -87,19 +78,20 @@ def s3_put_json(key: str, payload: Dict[str, Any]) -> None:
     )
 
 
+def s3_get_json(key: str) -> Dict[str, Any]:
+    obj = s3.get_object(Bucket=AWS_BUCKET, Key=key)
+    data = obj["Body"].read()
+    return json.loads(data.decode("utf-8"))
+
+
 def s3_key_exists(key: str) -> bool:
     try:
         s3.head_object(Bucket=AWS_BUCKET, Key=key)
         return True
-    except ClientError as e:
-        if e.response["Error"]["Code"] in ("404", "NoSuchKey", "NotFound"):
+    except ClientError as ce:
+        if ce.response.get("Error", {}).get("Code") == "404":
             return False
         raise
-
-
-def s3_get_json(key: str) -> Dict[str, Any]:
-    obj = s3.get_object(Bucket=AWS_BUCKET, Key=key)
-    return json.loads(obj["Body"].read().decode("utf-8"))
 
 
 def generate_presigned_url_from_key(key: str, expires_in: int = 3600) -> Optional[str]:
@@ -110,40 +102,65 @@ def generate_presigned_url_from_key(key: str, expires_in: int = 3600) -> Optiona
             ExpiresIn=expires_in,
         )
         return url
-    except Exception:
+    except ClientError:
         return None
 
 
-def create_job(file_bytes: bytes, note: str, mode: str = "dots") -> Dict[str, Any]:
+def get_s3_bytes(key: str) -> bytes:
+    obj = s3.get_object(Bucket=AWS_BUCKET, Key=key)
+    return obj["Body"].read()
+
+
+def slugify_filename(text: str) -> str:
     """
-    ใช้ logic เดียวกับ App-maker-App-maker:
-      - input video:  jobs/pending/<job_id>/input/input.mp4
-      - output video: jobs/output/<job_id>/result.mp4
-      - job JSON:     jobs/pending/<job_id>.json
+    แปลง note (เช่น 'Candidate A - Final Interview')
+    ให้เป็นชื่อไฟล์ปลอดภัย เช่น 'Candidate_A_Final_Interview'
+    """
+    text = text.strip()
+    if not text:
+        return ""
+    # แทนทุกอย่างที่ไม่ใช่ตัวอักษร/ตัวเลขด้วย _
+    text = re.sub(r"[^A-Za-z0-9ก-๙]+", "_", text)
+    # ตัด _ ซ้ำ ๆ ทิ้ง
+    text = re.sub(r"_+", "_", text)
+    return text.strip("_")
+
+
+# ----------------------------------------------------------
+# Job creation
+# ----------------------------------------------------------
+
+
+def create_job(file_bytes: bytes, filename: str, user_note: str) -> Dict[str, Any]:
+    """
+    สร้าง job ใหม่:
+      - เซฟวิดีโอที่ S3: jobs/pending/<job_id>/input/<original_filename>
+      - สร้าง JSON ที่ jobs/pending/<job_id>.json
+      - mode ถูก fix เป็น "dots"
     """
     job_id = new_job_id()
 
-    input_key = f"{JOBS_PENDING_PREFIX}{job_id}/input/input.mp4"
+    # เก็บชื่อไฟล์ต้นฉบับ (เพื่อ debug / audit)
+    safe_filename = filename or "input.mp4"
+
+    input_key = f"{JOBS_PENDING_PREFIX}{job_id}/input/{safe_filename}"
     output_key = f"{JOBS_OUTPUT_PREFIX}{job_id}/result.mp4"
 
-    # Upload video
-    upload_bytes_to_s3(
-        file_bytes,
-        input_key,
-        content_type="video/mp4",
-    )
+    # Upload video (ให้ ContentType เป็น video/mp4 แบบกว้าง ๆ)
+    upload_bytes_to_s3(file_bytes, input_key, content_type="video/mp4")
 
     now = utc_now_iso()
     job: Dict[str, Any] = {
         "job_id": job_id,
         "status": "pending",
-        "mode": mode,           # ⭐ สำคัญ - บอก worker ให้ทำ "dots"
+        "mode": "dots",  # ⭐ บอก worker ว่าต้อง run โหมด dots
         "input_key": input_key,
         "output_key": output_key,
         "created_at": now,
         "updated_at": now,
         "error": None,
-        "user_note": note,
+        "user_note": user_note or "",
+        "original_filename": safe_filename,
     }
 
     job_json_key = f"{JOBS_PENDING_PREFIX}{job_id}.json"
@@ -153,18 +170,27 @@ def create_job(file_bytes: bytes, note: str, mode: str = "dots") -> Dict[str, An
 
 
 # ----------------------------------------------------------
-# Section 1: Upload & create job
+# UI – Layout
 # ----------------------------------------------------------
 
-st.header("① Upload Video for Analysis")
+st.markdown(
+    """
+## ① Upload Video for Analysis
 
-col_left, col_right = st.columns([2, 1])
+1. อัปโหลดวิดีโอสัมภาษณ์ของคุณ  
+2. ระบบจะสร้าง Job ID และส่งไฟล์ไปให้ AI ประมวลผล  
+3. ใช้ Job ID เพื่อตรวจสอบสถานะ และดาวน์โหลดวิดีโอที่ประมวลผลแล้ว  
+"""
+)
 
-with col_left:
+col_upload, col_tips = st.columns([2.2, 1.1])
+
+with col_upload:
     uploaded_file = st.file_uploader(
         "Upload interview video file",
-        type=["mp4", "mov", "m4v"],
-        help="Limit ~1GB per file • เห็นตัวผู้พูดตั้งแต่ครึ่งตัวขึ้นไปจะดีที่สุด",
+        type=["mp4", "mov", "m4v", "mpeg4"],
+        accept_multiple_files=False,
+        help="Limit ประมาณ 1GB ต่อไฟล์ (แนะนำให้ใช้ 720p หรือไฟล์ไม่ใหญ่มากเพื่อความเร็วในการอัปโหลด)",
     )
 
     note = st.text_area(
@@ -172,125 +198,134 @@ with col_left:
         placeholder="เช่น Candidate A – Final Interview – Leadership Focus",
     )
 
-    submit_btn = st.button("🚀 Submit for AI analysis")
+    submit_clicked = st.button("🚀 Submit for AI analysis")
 
-with col_right:
-    st.markdown("#### Tips")
+    if submit_clicked:
+        if not uploaded_file:
+            st.error("กรุณาอัปโหลดวิดีโอก่อนค่ะ")
+        else:
+            file_bytes = uploaded_file.read()
+            filename = uploaded_file.name
+
+            # (เลือกได้ว่าจะตรวจขนาดไฟล์เพิ่มไหม ถ้าอยาก limit)
+            size_mb = len(file_bytes) / (1024 * 1024)
+            if size_mb <= 0:
+                st.error("ไฟล์วิดีโอไม่ถูกต้อง")
+            else:
+                with st.spinner("กำลังอัปโหลดวิดีโอและสร้างงานใหม่..."):
+                    job = create_job(file_bytes, filename, note)
+
+                st.success("สร้างงานใหม่สำเร็จแล้ว! 🎉")
+                st.write("**Job ID:**")
+                st.code(job["job_id"], language="text")
+
+                with st.expander("ดูรายละเอียดงาน (JSON ที่ส่งให้ worker)"):
+                    st.json(job)
+
+with col_tips:
+    st.subheader("Tips")
     st.markdown(
         """
 - วิดีโอควรมีความยาวพอดี ไม่ยาวเกินไป  
 - ผู้พูดควรเห็นหน้าและท่าทางอย่างชัดเจน  
-- บันทึก Job ID ไว้เพื่อตรวจสอบผลภายหลัง  
+- บันทึก Job ID ไว้ เพื่อกลับมาตรวจผลภายหลัง  
 """
     )
-
-if submit_btn:
-    if not uploaded_file:
-        st.warning("กรุณาอัปโหลดวิดีโอก่อนค่ะ")
-    else:
-        # hard limit ฝั่งเว็บ (1GB)
-        max_bytes = 1024 * 1024 * 1024
-        if uploaded_file.size > max_bytes:
-            st.error("⚠️ วิดีโอควรมีขนาดไม่เกิน 1GB")
-            st.stop()
-
-        file_bytes = uploaded_file.read()
-
-        # ใช้ mode="dots" เพื่อให้ worker ทำวิดีโอ dot เหมือนใน App-maker
-        job = create_job(file_bytes, note=note, mode="dots")
-
-        st.session_state["job_id"] = job["job_id"]
-        st.success(f"สร้างงานสำเร็จ! 🎉 Job ID ของคุณคือ: `{job['job_id']}`")
-        st.info("กรุณาคัดลอก Job ID ไว้ เพื่อใช้ในขั้นตอนถัดไป")
 
 st.markdown("---")
 
 # ----------------------------------------------------------
-# Section 2: Check job status & download
+# ② Check Job Status & Download Result
 # ----------------------------------------------------------
 
-st.header("② Check Job Status & View Report")
+st.markdown("## ② Check Job Status & View Report")
 
-col1, col2 = st.columns([2, 1])
+job_id_input = st.text_input(
+    "Enter Job ID",
+    placeholder="เช่น 20260117_010307__3dfd6",
+)
 
-with col1:
-    job_id_input = st.text_input(
-        "Enter Job ID",
-        value=st.session_state.get("job_id", ""),
-        placeholder="เช่น 20260116__abc12",
-    )
-    check_btn = st.button("🔍 Check status")
+check_clicked = st.button("🔍 Check status")
 
-with col2:
-    st.markdown(
-        """
-##### วิธีใช้
-1. วาง Job ID ที่คุณได้หลังอัปโหลดวิดีโอ  
-2. กดปุ่ม **Check status**  
-3. ถ้าประมวลผลเสร็จแล้ว ระบบจะแสดงสรุปและลิงก์สำหรับดาวน์โหลดวิดีโอ  
-"""
-    )
-
-if check_btn:
+if check_clicked:
     if not job_id_input.strip():
-        st.warning("กรุณากรอก Job ID ก่อนค่ะ")
+        st.error("กรุณาใส่ Job ID ก่อนค่ะ")
     else:
         job_id = job_id_input.strip()
 
-        finished_key = f"{JOBS_FINISHED_PREFIX}{job_id}.json"
         pending_key = f"{JOBS_PENDING_PREFIX}{job_id}.json"
+        processing_key = f"{JOBS_PROCESSING_PREFIX}{job_id}.json"
+        finished_key = f"{JOBS_FINISHED_PREFIX}{job_id}.json"
         failed_key = f"{JOBS_FAILED_PREFIX}{job_id}.json"
 
-        try:
-            if s3_key_exists(failed_key):
-                st.error("❌ งานนี้ประมวลผลไม่สำเร็จ (อยู่ใน failed).")
-                failed_info = s3_get_json(failed_key)
-                with st.expander("ดูรายละเอียด error (จาก worker)"):
-                    st.json(failed_info)
+        # ลำดับการเช็คสถานะ
+        if s3_key_exists(failed_key):
+            result = s3_get_json(failed_key)
+            st.error("งานนี้ประมวลผลล้มเหลว 😥")
+            with st.expander("ดู JSON ทั้งหมดที่ได้จาก worker"):
+                st.json(result)
 
-            elif s3_key_exists(finished_key):
-                result = s3_get_json(finished_key)
-                st.success("✅ งานนี้ประมวลผลเสร็จสิ้นแล้ว! 🎉")
+        elif s3_key_exists(finished_key):
+            result = s3_get_json(finished_key)
+            st.success("✅ งานนี้ประมวลผลเสร็จสิ้นแล้ว! 🎉")
 
-                st.subheader("Result Summary")
+            st.subheader("Result Summary")
 
-                with st.expander("ดู JSON ทั้งหมดที่ได้จาก worker"):
-                    st.json(result)
+            with st.expander("ดู JSON ทั้งหมดที่ได้จาก worker"):
+                st.json(result)
 
-                # ดึง URL ของวิดีโอที่ได้
-                report_url: Optional[str] = None
+            # -------------------------------
+            # ปุ่มดาวน์โหลดไฟล์จาก S3 โดยตรง
+            # -------------------------------
+            output_key: Optional[str] = None
 
-                # worker เขียน output_key ไว้ใน JSON (ตาม create_job)
-                if "output_key" in result:
-                    report_url = generate_presigned_url_from_key(
-                        result["output_key"], expires_in=3600
+            if "output_key" in result and result["output_key"]:
+                output_key = result["output_key"]
+            elif "report_s3_key" in result and result["report_s3_key"]:
+                output_key = result["report_s3_key"]
+
+            # เตรียมชื่อไฟล์สวย ๆ สำหรับดาวน์โหลด
+            user_note = result.get("user_note", "") or ""
+            base_name = slugify_filename(user_note)
+            if not base_name:
+                base_name = job_id
+            download_name = f"{base_name}_dots.mp4"
+
+            if output_key:
+                try:
+                    video_bytes = get_s3_bytes(output_key)
+
+                    st.download_button(
+                        label="📥 Download processed video / report",
+                        data=video_bytes,
+                        file_name=download_name,
+                        mime="video/mp4",
                     )
 
-                # เผื่ออนาคต worker ส่งอย่างอื่นมา
-                elif "report_s3_key" in result:
-                    report_url = generate_presigned_url_from_key(
-                        result["report_s3_key"], expires_in=3600
+                except ClientError as ce:
+                    st.warning(
+                        f"ไม่สามารถโหลดไฟล์จาก S3 โดยตรงได้ ({ce}). "
+                        "จะลองสร้างลิงก์ชั่วคราวสำหรับเปิดไฟล์แทน"
                     )
-                elif "report_url" in result:
-                    report_url = result["report_url"]
-
-                if report_url:
-                    st.markdown(f"[📄 Download processed video / report]({report_url})")
-                else:
-                    st.info(
-                        "ไม่มี URL ของ report ในผลลัพธ์ กรุณาตรวจสอบ JSON จาก worker "
-                        "ว่ามี field `output_key`, `report_s3_key` หรือ `report_url` หรือไม่"
-                    )
-
-            elif s3_key_exists(pending_key):
-                st.info("🕒 งานนี้กำลังรอหรือกำลังประมวลผล กรุณาลองใหม่ภายหลัง")
+                    report_url = generate_presigned_url_from_key(output_key, expires_in=3600)
+                    if report_url:
+                        st.markdown(f"[เปิดไฟล์จาก S3]({report_url})")
+                    else:
+                        st.error("ไม่สามารถสร้างลิงก์ดาวน์โหลดจาก S3 ได้")
+            elif "report_url" in result and result["report_url"]:
+                # fallback กรณี worker สร้าง URL มาให้เอง
+                st.markdown(
+                    f"[📄 Download processed video / report]({result['report_url']})"
+                )
             else:
-                st.warning(
-                    "ไม่พบ Job นี้ในระบบ (ไม่มีใน pending / finished / failed). "
-                    "กรุณาตรวจสอบว่า Job ID ถูกต้องหรือไม่"
+                st.info(
+                    "ไม่มีข้อมูลตำแหน่งไฟล์ในผลลัพธ์ "
+                    "กรุณาตรวจสอบว่า worker เขียน `output_key` หรือ `report_s3_key` หรือไม่"
                 )
 
-        except ClientError as e:
-            st.error(f"เกิดข้อผิดพลาดจากฝั่ง S3: {e}")
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดไม่คาดคิด: {e}")
+        elif s3_key_exists(processing_key):
+            st.info("⏳ งานนี้กำลังประมวลผลอยู่ (processing)...")
+        elif s3_key_exists(pending_key):
+            st.info("⌛ งานนี้ยังอยู่ในคิว (pending) รอ worker มาประมวลผล...")
+        else:
+            st.warning("ไม่พบงานนี้ในระบบ กรุณาตรวจสอบว่า Job ID ถูกต้องหรือไม่")
