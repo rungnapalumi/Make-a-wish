@@ -1,3 +1,6 @@
 streamlit
 boto3
-python-docx
+pandas
+numpy
+opencv-python-headless
+mediapipe
