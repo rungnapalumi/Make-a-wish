@@ -142,7 +142,7 @@ def process_job(job_json_key: str) -> None:
     move_json(job_json_key, processing_key, job)
 
     try:
-        # ไม่ว่า mode จะเป็นอะไร ตอนนี้ให้ copy วิดีโออย่างเดียวก่อน
+        # ตอนนี้ให้ copy วิดีโออย่างเดียวก่อน
         copy_video_in_s3(input_key, output_key)
 
         job = update_status(job, "finished", error=None)
