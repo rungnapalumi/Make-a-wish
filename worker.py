@@ -18,6 +18,8 @@ try:
 except Exception:
     np = None  # type: ignore
 
+# เรา "พยายาม" import mediapipe แต่ไม่บังคับว่าต้องมีแล้ว
+# (requirements.txt ไม่มี mediapipe แล้ว ดังนั้นที่นี่จะกลายเป็น mp=None)
 try:
     import mediapipe as mp  # type: ignore
     MP_HAS_SOLUTIONS = hasattr(mp, "solutions")
@@ -141,33 +143,29 @@ def update_status(job: dict, status: str, error: str | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Dots (Johansson) processing
+# Dots (Johansson) processing — version ไม่ใช้ Mediapipe
 # ---------------------------------------------------------------------------
 
 
 def process_dots_video(input_key: str, output_key: str, multi_person: bool = False) -> None:
     """
-    สร้างวิดีโอ Johansson dot:
+    สร้างวิดีโอ Johansson-style dots โดยใช้ OpenCV + Background subtraction
+    (ไม่พึ่ง Mediapipe):
       - อ่านวิดีโอจาก S3
-      - ใช้ MediaPipe Pose หา joint
-      - วาดจุดสีขาว radius=5 px ลงบนพื้นหลังดำ
-      - size ทุกเฟรมถูกบังคับให้เท่ากับ (width, height) เดียวกัน
-
-    NOTE:
-      ตอนนี้ mediapipe.solutions.pose เป็น single-person pose
-      ดังนั้น multi_person=True ยังใช้ logic เดียวกับ single อยู่
-      (โครงสร้างเผื่ออนาคตเปลี่ยนไปใช้โมเดลแบบหลายคน)
+      - ใช้ background subtractor หา silhouette
+      - สุ่มเลือกจุดตาม contour ของร่างกาย
+      - วาดจุดสีขาวลงบนพื้นหลังดำ
     """
-    if cv2 is None or np is None or not (mp and MP_HAS_SOLUTIONS):
+    if cv2 is None or np is None:
         raise RuntimeError(
-            "Johansson dots mode requires OpenCV, NumPy, and MediaPipe to be installed"
+            "Johansson dots mode requires OpenCV and NumPy to be installed"
         )
 
     input_path = download_to_temp(input_key, suffix=".mp4")
     out_path = tempfile.mktemp(suffix=".mp4")
 
     logger.info(
-        "[dots] starting Johansson processing input=%s out=%s multi_person=%s",
+        "[dots] starting Johansson processing (no Mediapipe) input=%s out=%s multi_person=%s",
         input_path,
         out_path,
         multi_person,
@@ -200,54 +198,62 @@ def process_dots_video(input_key: str, output_key: str, multi_person: bool = Fal
         writer.release()
         raise RuntimeError("Could not open VideoWriter for output")
 
-    pose = mp.solutions.pose.Pose(  # type: ignore[attr-defined]
-        static_image_mode=False,
-        model_complexity=1,
-        enable_segmentation=False,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
+    # Background subtractor สำหรับหา silhouette
+    bg_subtractor = cv2.createBackgroundSubtractorMOG2(
+        history=500, varThreshold=25, detectShadows=False
     )
-
+    kernel = np.ones((3, 3), np.uint8)
     RADIUS = 5  # ขนาดจุดเท่ากันทุกเฟรม
+    MAX_DOTS = 20
 
     try:
-        with pose:
-            while True:
-                ok, frame = cap.read()
-                if not ok:
-                    break
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
 
-                # บังคับทุกเฟรมให้ขนาดเท่ากับ (width, height)
-                frame = cv2.resize(frame, (width, height))
+            # บังคับทุกเฟรมให้ขนาดเท่ากับ (width, height)
+            frame = cv2.resize(frame, (width, height))
 
-                # Pose detection
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(rgb)  # type: ignore[arg-type]
+            # หาร่างกายด้วย background subtraction
+            fgmask = bg_subtractor.apply(frame)
 
-                # สร้างพื้นหลังดำขนาดเดียวกันทุกเฟรม
-                black = np.zeros((height, width, 3), dtype=np.uint8)
+            # ทำความสะอาด noise
+            _, thresh = cv2.threshold(fgmask, 200, 255, cv2.THRESH_BINARY)
+            thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+            thresh = cv2.dilate(thresh, kernel, iterations=2)
 
-                if results.pose_landmarks:
-                    h, w, _ = black.shape
+            contours, _ = cv2.findContours(
+                thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
 
-                    # ตอนนี้ยังได้ landmark ชุดเดียว (single person)
-                    # multi_person flag เผื่อไว้สำหรับอนาคต
-                    for lm in results.pose_landmarks.landmark:
-                        if getattr(lm, "visibility", 1.0) < 0.5:
-                            continue
-                        x = int(lm.x * w)
-                        y = int(lm.y * h)
-                        if 0 <= x < w and 0 <= y < h:
-                            cv2.circle(
-                                black,
-                                (x, y),
-                                RADIUS,
-                                (255, 255, 255),
-                                -1,
-                                lineType=cv2.LINE_AA,
-                            )
+            # สร้างพื้นหลังดำขนาดเดียวกันทุกเฟรม
+            black = np.zeros((height, width, 3), dtype=np.uint8)
 
-                writer.write(black)
+            if contours:
+                # ใช้ contour ที่ใหญ่สุดเป็น silhouette หลัก
+                largest = max(contours, key=cv2.contourArea)
+                if cv2.contourArea(largest) > 100:  # กันกรณี noise เล็ก ๆ
+                    epsilon = 0.01 * cv2.arcLength(largest, True)
+                    hull = cv2.approxPolyDP(largest, epsilon, True)
+                    pts = hull.reshape(-1, 2)
+
+                    if len(pts) > 0:
+                        step = max(1, len(pts) // MAX_DOTS)
+                        for (x, y) in pts[::step]:
+                            x = int(x)
+                            y = int(y)
+                            if 0 <= x < width and 0 <= y < height:
+                                cv2.circle(
+                                    black,
+                                    (x, y),
+                                    RADIUS,
+                                    (255, 255, 255),
+                                    -1,
+                                    lineType=cv2.LINE_AA,
+                                )
+
+            writer.write(black)
 
     finally:
         cap.release()
