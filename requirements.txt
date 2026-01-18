@@ -3,9 +3,10 @@ pandas
 boto3
 python-docx
 opencv-python-headless
-mediapipe==0.10.3
+mediapipe==0.10.31
 numpy
 pillow
 moviepy
 pytz
+
 
