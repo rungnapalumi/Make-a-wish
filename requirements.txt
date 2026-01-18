@@ -4,10 +4,9 @@ boto3
 python-docx
 
 opencv-python-headless==4.8.1.78
-
 numpy==1.26.4
+mediapipe==0.10.30
 
 pillow
 moviepy
 pytz
-
