@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import boto3
 
-# Optional heavy libs – เรารองรับกรณี import ไม่ได้ ด้วยการ fail job สวย ๆ
+# Optional heavy libs – รองรับกรณี import ไม่ได้ ด้วยการ fail job สวย ๆ
 try:
     import cv2  # type: ignore
 except Exception:  # ImportError หรือ error อื่น ๆ
@@ -305,11 +305,10 @@ def process_job(job_json_key: str) -> None:
         elif mode in ("dots_2p", "dots_multi"):
             process_dots_video(input_key, output_key, multi_person=True)
         else:
-            # default: passthrough / copy เฉย ๆ (clear / skeleton ฯลฯ ตอนนี้ยัง copy ตรง ๆ ไปก่อน)
+            # default: passthrough / copy เฉย ๆ
             copy_video_in_s3(input_key, output_key)
 
         job = update_status(job, "finished", error=None)
-        finished_key = f"{FINISHED_PREFIX}/{job_id}.json}"
         finished_key = f"{FINISHED_PREFIX}/{job_id}.json"
         move_json(processing_key, finished_key, job)
         logger.info("[process_job] job_id=%s finished", job_id)
