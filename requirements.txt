@@ -1,6 +1,12 @@
 streamlit
-boto3
 pandas
-numpy
+
+boto3
+python-docx
 opencv-python-headless
-mediapipe
+mediapipe==0.10.9
+numpy
+pillow
+moviepy
+pytz
+
