@@ -1,4 +1,4 @@
-sstreamlit
+streamlit
 pandas
 boto3
 python-docx
