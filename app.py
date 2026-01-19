@@ -1504,7 +1504,7 @@ def analyze_video_placeholder(video_path: str, seed: int = 42) -> dict:
 # =========================
 def build_docx_report(
     report: ReportData,
-    out_path: str,
+    out_path: str | io.BytesIO,
     graph1_path: str = None,
     graph2_path: str = None,
     lang: str = "en",
@@ -1716,6 +1716,7 @@ def build_docx_report(
     footer_run = footer_text_paragraph.add_run(report.generated_by)
     footer_run.italic = True
 
+    # `python-docx` supports saving to either a filesystem path or a file-like object (e.g. BytesIO).
     doc.save(out_path)
 
 
@@ -2093,6 +2094,20 @@ with st.form("report_form", clear_on_submit=False):
         )
     generate = st.form_submit_button("Generate Report")
 
+# Persist report artifacts across reruns.
+# Important: clicking a download button triggers a rerun; if the artifacts only exist inside `if generate:`,
+# the download can fail (Chrome often shows 0 B "Starting…").
+if "report_ready" not in st.session_state:
+    st.session_state["report_ready"] = False
+if "docx_bytes" not in st.session_state:
+    st.session_state["docx_bytes"] = None
+if "docx_file_name" not in st.session_state:
+    st.session_state["docx_file_name"] = None
+if "pdf_bytes" not in st.session_state:
+    st.session_state["pdf_bytes"] = None
+if "pdf_file_name" not in st.session_state:
+    st.session_state["pdf_file_name"] = None
+
 if generate:
     if uploaded_video is None:
         st.error("Please upload a video first.")
@@ -2183,10 +2198,10 @@ if generate:
 
         progress.progress(55, text="Generating graphs…")
 
-        # Build docx (optional)
+        # Build outputs
         out_dir = tempfile.mkdtemp()
         lang_suffix = "TH" if lang_code == "th" else "EN"
-        out_path = os.path.join(out_dir, f"Presentation_Analysis_Report_{analysis_date}_{lang_suffix}.docx")
+        docx_file_name = f"Presentation_Analysis_Report_{analysis_date}_{lang_suffix}.docx"
         
         # Generate graphs based on detection results
         graph1_path = os.path.join(out_dir, "Graph 1.png")
@@ -2219,8 +2234,16 @@ if generate:
                 plt.close()
         
         progress.progress(75, text="Building reports…")
-        build_docx_report(report, out_path, graph1_path=graph1_path, graph2_path=graph2_path, lang=lang_code)
-        pdf_out_path = os.path.join(out_dir, f"report_{lang_suffix}.pdf")
+
+        # Build DOCX in-memory (more reliable for downloads on hosted environments).
+        docx_bio = io.BytesIO()
+        build_docx_report(report, docx_bio, graph1_path=graph1_path, graph2_path=graph2_path, lang=lang_code)
+        docx_bytes = docx_bio.getvalue()
+        if not docx_bytes:
+            raise RuntimeError("DOCX generation produced empty output.")
+
+        pdf_file_name = f"report_{lang_suffix}.pdf"
+        pdf_out_path = os.path.join(out_dir, pdf_file_name)
         pdf_built = True
         try:
             build_pdf_report(report, pdf_out_path, graph1_path=graph1_path, graph2_path=graph2_path, lang=lang_code)
@@ -2240,35 +2263,18 @@ if generate:
         except Exception:
             pass
 
-        # Offer downloads
+        # Read PDF bytes (if available) and persist artifacts for downloads across reruns.
         pdf_bytes = None
         if pdf_built and os.path.exists(pdf_out_path):
             with open(pdf_out_path, "rb") as f:
                 pdf_bytes = f.read()
-        with open(out_path, "rb") as f:
-            docx_bytes = f.read()
 
         progress.progress(90, text="Preparing downloads…")
-        st.success("Report generated!")
-        st.download_button(
-            label="Download Uploaded Video",
-            data=uploaded_video_bytes,
-            file_name=uploaded_video_filename,
-            mime="video/mp4",
-        )
-        st.download_button(
-            label="Download DOCX Report (editable)",
-            data=docx_bytes,
-            file_name=os.path.basename(out_path),
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
-        st.download_button(
-            label="Download PDF Report",
-            data=pdf_bytes if pdf_bytes is not None else b"",
-            file_name=os.path.basename(pdf_out_path),
-            mime="application/pdf",
-            disabled=(pdf_bytes is None),
-        )
+        st.session_state["report_ready"] = True
+        st.session_state["docx_bytes"] = docx_bytes
+        st.session_state["docx_file_name"] = docx_file_name
+        st.session_state["pdf_bytes"] = pdf_bytes
+        st.session_state["pdf_file_name"] = pdf_file_name
 
         progress.progress(100, text="Done.")
         status.update(label="Report ready", state="complete", expanded=False)
@@ -2311,3 +2317,33 @@ if generate:
                     ]
                 )
             )
+
+# Download section (outside `if generate:` so it keeps working after reruns)
+if st.session_state.get("report_ready") and st.session_state.get("docx_bytes"):
+    st.success("Report generated!")
+
+    cols = st.columns([1, 1, 1])
+    with cols[0]:
+        st.download_button(
+            label="Download DOCX Report (editable)",
+            data=st.session_state["docx_bytes"],
+            file_name=st.session_state.get("docx_file_name") or "Presentation_Analysis_Report.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key="download_docx_report",
+        )
+    with cols[1]:
+        st.download_button(
+            label="Download PDF Report",
+            data=st.session_state.get("pdf_bytes") if st.session_state.get("pdf_bytes") is not None else b"",
+            file_name=st.session_state.get("pdf_file_name") or "Presentation_Analysis_Report.pdf",
+            mime="application/pdf",
+            disabled=(st.session_state.get("pdf_bytes") is None),
+            key="download_pdf_report",
+        )
+    with cols[2]:
+        if st.button("Clear report", key="clear_report_artifacts"):
+            st.session_state["report_ready"] = False
+            st.session_state["docx_bytes"] = None
+            st.session_state["docx_file_name"] = None
+            st.session_state["pdf_bytes"] = None
+            st.session_state["pdf_file_name"] = None
