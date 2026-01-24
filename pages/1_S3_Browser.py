@@ -54,11 +54,46 @@ def get_bytes(key: str) -> bytes:
     obj = s3.get_object(Bucket=AWS_BUCKET, Key=key)
     return obj["Body"].read()
 
-def presign(key: str, exp: int = 3600) -> Optional[str]:
+def guess_content_type(key: str) -> str:
+    k = key.lower()
+    if k.endswith(".mp4"):
+        return "video/mp4"
+    if k.endswith(".mov"):
+        return "video/quicktime"
+    if k.endswith(".m4v"):
+        return "video/x-m4v"
+    if k.endswith(".webm"):
+        return "video/webm"
+    if k.endswith(".json"):
+        return "application/json"
+    if k.endswith(".pdf"):
+        return "application/pdf"
+    if k.endswith(".docx"):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return "application/octet-stream"
+
+def presign(
+    key: str,
+    exp: int = 3600,
+    filename: Optional[str] = None,
+    content_type: Optional[str] = None,
+) -> Optional[str]:
+    """
+    ✅ Force download (not open in browser tab) by setting:
+      ResponseContentDisposition = attachment; filename="..."
+    """
     try:
+        params = {"Bucket": AWS_BUCKET, "Key": key}
+
+        if filename:
+            params["ResponseContentDisposition"] = f'attachment; filename="{filename}"'
+
+        if content_type:
+            params["ResponseContentType"] = content_type
+
         return s3.generate_presigned_url(
             "get_object",
-            Params={"Bucket": AWS_BUCKET, "Key": key},
+            Params=params,
             ExpiresIn=exp,
         )
     except ClientError:
@@ -106,9 +141,16 @@ if files:
     key = st.selectbox("Select file", files)
     st.write("Key:", key)
 
-    url = presign(key)
+    # ✅ Force download URL (attachment)
+    forced_name = os.path.basename(key) or "download.bin"
+    url = presign(
+        key,
+        exp=3600,
+        filename=forced_name,
+        content_type=guess_content_type(key),
+    )
     if url:
-        st.link_button("⬇️ Download", url)
+        st.link_button("⬇️ Download (file)", url)
 
     st.markdown("### Preview")
     try:
@@ -118,7 +160,11 @@ if files:
         elif is_video(key):
             st.video(temp_download(key))
         else:
-            st.download_button("Download file", data=get_bytes(key), file_name=os.path.basename(key))
+            st.download_button(
+                "Download file (direct)",
+                data=get_bytes(key),
+                file_name=os.path.basename(key),
+            )
     except Exception as e:
         st.error("Preview failed")
         st.exception(e)
